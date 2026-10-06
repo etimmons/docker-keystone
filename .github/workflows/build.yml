@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: openstack/keystone
-          ref: b6fd80996b882890a51f3e2aab41d952d7ff68ae
+          ref: 98b2c8dea5d5be7f30a17d9ee7fc629794b205ed
           path: openstack/keystone
           fetch-depth: 0
 
