@@ -8,22 +8,59 @@ on:
       - main
       - stable/**
 
+permissions:
+  contents: read
+
 jobs:
   image:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
       packages: write
-      pull-requests: write
     steps:
-      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@db1fb3032d9f9a0a3ad24819e88c1b82fab4231c # main
+      - uses: actions/checkout@v6
+        with:
+          clean: false
+
+      - uses: actions/checkout@v6
         with:
           repository: openstack/keystone
-          ref: 98b2c8dea5d5be7f30a17d9ee7fc629794b205ed # stable/2025.2
+          ref: b6fd80996b882890a51f3e2aab41d952d7ff68ae
+          path: openstack/keystone
+          fetch-depth: 0
 
-      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@db1fb3032d9f9a0a3ad24819e88c1b82fab4231c # main
+      - name: Apply patches
+        if: hashFiles('patches/openstack/keystone/*.patch') != ''
+        run: git -C openstack/keystone apply --verbose "$GITHUB_WORKSPACE"/patches/openstack/keystone/*
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        if: github.event_name != 'pull_request'
         with:
-          image-name: keystone
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/keystone
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=
+            type=ref,event=branch
+            type=match,pattern=stable/(.*),group=1,value={{branch}}
+            type=ref,event=pr
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
           build-contexts: keystone=openstack/keystone
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
